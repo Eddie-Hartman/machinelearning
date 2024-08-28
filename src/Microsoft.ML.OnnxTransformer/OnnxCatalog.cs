@@ -126,6 +126,24 @@ namespace Microsoft.ML
         }
 
         /// <summary>
+        /// Create a <see cref="OnnxScoringEstimator"/> using the specified <see cref="OnnxOptions"/>.
+        /// Please refer to <see cref="OnnxScoringEstimator"/> to learn more about the necessary dependencies,
+        /// and how to run it on a GPU.
+        /// </summary>
+        /// <remarks>
+        /// If the options.GpuDeviceId value is <see langword="null" /> the <see cref="P:MLContext.GpuDeviceId"/> value will be used if it is not <see langword="null" />.
+        /// </remarks>
+        /// <param name="catalog">The transform's catalog.</param>
+        /// <param name="options">Options for the <see cref="OnnxScoringEstimator"/>.</param>
+        /// <param name="modelBytes">Optional override for passing the model as a byte array instead of file path.</param>
+        public static OnnxScoringEstimator ApplyOnnxModel(this TransformsCatalog catalog, OnnxOptions options, byte[] modelBytes = null)
+        {
+            var (env, gpuDeviceIdToUse, fallbackToCpuToUse) = GetGpuDeviceId(catalog, options.GpuDeviceId, options.FallbackToCpu);
+            return new OnnxScoringEstimator(env, options.OutputColumns, options.InputColumns, options.ModelFile,
+                gpuDeviceIdToUse, fallbackToCpuToUse, options.ShapeDictionary, options.RecursionLimit, options.InterOpNumThreads, options.IntraOpNumThreads, modelBytes);
+        }
+
+        /// <summary>
         /// Create a <see cref="OnnxScoringEstimator"/>, which applies a pre-trained Onnx model to the <paramref name="inputColumnName"/> column.
         /// Please refer to <see cref="OnnxScoringEstimator"/> to learn more about the necessary dependencies,
         /// and how to run it on a GPU.

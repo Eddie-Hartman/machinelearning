@@ -262,8 +262,6 @@ namespace Microsoft.ML.Transforms.Onnx
                 }
                 else
                 {
-                    // Entering this region means that the byte[] is passed as the model. To feed that byte[] to ONNXRuntime, we need
-                    // to create a temporal file to store it and then call ONNXRuntime's API to load that file.
                     Model = OnnxModel.CreateFromBytes(modelBytes, env, options.GpuDeviceId, options.FallbackToCpu, shapeDictionary: shapeDictionary, options.RecursionLimit);
                 }
             }
@@ -325,9 +323,10 @@ namespace Microsoft.ML.Transforms.Onnx
         /// <param name="recursionLimit">Optional, specifies the Protobuf CodedInputStream recursion limit. Default value is 100.</param>
         /// <param name="interOpNumThreads">Controls the number of threads used to parallelize the execution of the graph (across nodes).</param>
         /// <param name="intraOpNumThreads">Controls the number of threads to use to run the model.</param>
+        /// <param name="modelBytes">Overrides the model files to use the byte array as the model.</param>
         internal OnnxTransformer(IHostEnvironment env, string[] outputColumnNames, string[] inputColumnNames, string modelFile, int? gpuDeviceId = null, bool fallbackToCpu = false,
             IDictionary<string, int[]> shapeDictionary = null, int recursionLimit = 100,
-            int? interOpNumThreads = null, int? intraOpNumThreads = null)
+            int? interOpNumThreads = null, int? intraOpNumThreads = null, byte[] modelBytes = null)
             : this(env, new Options()
             {
                 ModelFile = modelFile,
@@ -339,7 +338,8 @@ namespace Microsoft.ML.Transforms.Onnx
                 RecursionLimit = recursionLimit,
                 InterOpNumThreads = interOpNumThreads,
                 IntraOpNumThreads = intraOpNumThreads
-            })
+            },
+            modelBytes)
         {
         }
 
@@ -920,10 +920,11 @@ namespace Microsoft.ML.Transforms.Onnx
         /// <param name="recursionLimit">Optional, specifies the Protobuf CodedInputStream recursion limit. Default value is 100.</param>
         /// <param name="interOpNumThreads">Controls the number of threads used to parallelize the execution of the graph (across nodes).</param>
         /// <param name="intraOpNumThreads">Controls the number of threads to use to run the model.</param>
+        /// <param name="modelBytes">Optional, specifies to override the model file with the model given in a byte array.</param>
         internal OnnxScoringEstimator(IHostEnvironment env, string[] outputColumnNames, string[] inputColumnNames, string modelFile,
             int? gpuDeviceId = null, bool fallbackToCpu = false, IDictionary<string, int[]> shapeDictionary = null, int recursionLimit = 100,
-            int? interOpNumThreads = null, int? intraOpNumThreads = null)
-           : this(env, new OnnxTransformer(env, outputColumnNames, inputColumnNames, modelFile, gpuDeviceId, fallbackToCpu, shapeDictionary, recursionLimit, interOpNumThreads, intraOpNumThreads))
+            int? interOpNumThreads = null, int? intraOpNumThreads = null, byte[] modelBytes = null)
+           : this(env, new OnnxTransformer(env, outputColumnNames, inputColumnNames, modelFile, gpuDeviceId, fallbackToCpu, shapeDictionary, recursionLimit, interOpNumThreads, intraOpNumThreads, modelBytes: modelBytes))
         {
         }
 

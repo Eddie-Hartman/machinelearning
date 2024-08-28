@@ -167,9 +167,10 @@ namespace Microsoft.ML.Transforms.Onnx
         /// <param name="recursionLimit">Optional, specifies the Protobuf CodedInputStream recursion limit. Default value is 100.</param>
         /// <param name="interOpNumThreads">Controls the number of threads used to parallelize the execution of the graph (across nodes).</param>
         /// <param name="intraOpNumThreads">Controls the number of threads to use to run the model.</param>
+        /// <param name="modelBytes">Overrides the model files to use the byte array as the model.</param>
         public OnnxModel(string modelFile, int? gpuDeviceId = null, bool fallbackToCpu = false,
             bool ownModelFile = false, IDictionary<string, int[]> shapeDictionary = null, int recursionLimit = 100,
-            int? interOpNumThreads = null, int? intraOpNumThreads = null)
+            int? interOpNumThreads = null, int? intraOpNumThreads = null, byte[] modelBytes = null)
         {
             // If we don't own the model file, _disposed should be false to prevent deleting user's file.
             _disposed = false;
@@ -178,8 +179,17 @@ namespace Microsoft.ML.Transforms.Onnx
             {
                 try
                 {
-                    _session = new InferenceSession(modelFile,
-                        SessionOptions.MakeSessionOptionWithCudaProvider(gpuDeviceId.Value));
+                    if (modelBytes is null)
+                    {
+
+                        _session = new InferenceSession(modelFile,
+                            SessionOptions.MakeSessionOptionWithCudaProvider(gpuDeviceId.Value));
+                    }
+                    else
+                    {
+                        _session = new InferenceSession(modelBytes,
+                            SessionOptions.MakeSessionOptionWithCudaProvider(gpuDeviceId.Value));
+                    }
                 }
                 catch (OnnxRuntimeException)
                 {
@@ -190,7 +200,14 @@ namespace Microsoft.ML.Transforms.Onnx
                             InterOpNumThreads = interOpNumThreads.GetValueOrDefault(),
                             IntraOpNumThreads = intraOpNumThreads.GetValueOrDefault()
                         };
-                        _session = new InferenceSession(modelFile, sessionOptions);
+                        if (modelBytes is null)
+                        {
+                            _session = new InferenceSession(modelFile, sessionOptions);
+                        }
+                        else
+                        {
+                            _session = new InferenceSession(modelBytes, sessionOptions);
+                        }
                     }
                     else
                         // If called from OnnxTransform, is caught and rethrown
@@ -204,7 +221,14 @@ namespace Microsoft.ML.Transforms.Onnx
                     InterOpNumThreads = interOpNumThreads.GetValueOrDefault(),
                     IntraOpNumThreads = intraOpNumThreads.GetValueOrDefault()
                 };
-                _session = new InferenceSession(modelFile, sessionOptions);
+                if (modelBytes is null)
+                {
+                    _session = new InferenceSession(modelFile, sessionOptions);
+                }
+                else
+                {
+                    _session = new InferenceSession(modelBytes, sessionOptions);
+                }
             }
 
             try
@@ -212,14 +236,14 @@ namespace Microsoft.ML.Transforms.Onnx
                 // Load ONNX model file and parse its input and output schema. The reason of doing so is that ONNXRuntime
                 // doesn't expose full type information via its C# APIs.
                 var model = new OnnxCSharpToProtoWrapper.ModelProto();
+
                 // If we own the model file set the DeleteOnClose flag so it is always deleted.
-                if (ownModelFile)
-                    ModelStream = new FileStream(modelFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.DeleteOnClose);
-                else
+                if (!ownModelFile)
                     ModelStream = new FileStream(modelFile, FileMode.Open, FileAccess.Read);
 
                 // The CodedInputStream auto closes the stream, and we need to make sure that our main stream stays open, so creating a new one here.
-                using (var modelStream = new FileStream(modelFile, FileMode.Open, FileAccess.Read, FileShare.Delete | FileShare.Read))
+                using (Stream modelStream = modelBytes is null ? new FileStream(modelFile, FileMode.Open, FileAccess.Read, FileShare.Delete | FileShare.Read)
+                    : new MemoryStream(modelBytes))
                 using (var codedStream = Google.Protobuf.CodedInputStream.CreateWithLimits(modelStream, Int32.MaxValue, recursionLimit))
                     model = OnnxCSharpToProtoWrapper.ModelProto.Parser.ParseFrom(codedStream);
 
@@ -353,7 +377,6 @@ namespace Microsoft.ML.Transforms.Onnx
 
         /// <summary>
         /// Create an OnnxModel from a byte[]. Set execution to GPU if required.
-        /// Usually, a ONNX model is consumed by <see cref="OnnxModel"/> as a file.
         /// With <see cref="CreateFromBytes(byte[], IHostEnvironment)"/> and
         /// <see cref="CreateFromBytes(byte[], IHostEnvironment, int?, bool, IDictionary{string, int[]}, int)"/>,
         /// it's possible to use in-memory model (type: byte[]) to create <see cref="OnnxModel"/>.
@@ -370,9 +393,7 @@ namespace Microsoft.ML.Transforms.Onnx
         public static OnnxModel CreateFromBytes(byte[] modelBytes, IHostEnvironment env, int? gpuDeviceId = null, bool fallbackToCpu = false,
             IDictionary<string, int[]> shapeDictionary = null, int recursionLimit = 100)
         {
-            var tempModelFile = Path.Combine(((IHostEnvironmentInternal)env).TempFilePath, Path.GetRandomFileName());
-            File.WriteAllBytes(tempModelFile, modelBytes);
-            return new OnnxModel(tempModelFile, gpuDeviceId, fallbackToCpu,
+            return new OnnxModel("", gpuDeviceId, fallbackToCpu,
                 ownModelFile: true, shapeDictionary: shapeDictionary, recursionLimit);
         }
 
